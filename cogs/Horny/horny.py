@@ -16,12 +16,12 @@ def generate_percentage_image_full_image(base_image_url, horny_percentage):
     response.raise_for_status()
 
     # Create an in-memory image from the downloaded content
-    base_image = Image.open(io.BytesIO(response.content))
+    base_image = Image.open(io.BytesIO(response.content)).convert("RGBA")  # Convert to RGBA
     
     width, height = base_image.size
     center_x, center_y = width // 2, height // 2
 
-    mask = Image.new("L", (width, height), 0)
+    mask = Image.new("L", (width, height), 0)  # L mode is fine for the mask
     draw = ImageDraw.Draw(mask)
 
     # Calculate the angle based on the percentage
@@ -43,6 +43,7 @@ def generate_percentage_image_full_image(base_image_url, horny_percentage):
     # Draw the slice
     draw.polygon(points, fill=255)
 
+    # Apply the mask to the alpha channel of the base image
     base_image.putalpha(mask)
     return base_image
 
