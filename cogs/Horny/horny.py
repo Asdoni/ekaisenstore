@@ -56,7 +56,7 @@ def format_timedelta(td):
     return f"{hours}h {minutes}m {seconds}s"
 
 
-class hornyCog(commands.Cog):
+class HornyCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.cooldowns = {}
@@ -95,8 +95,8 @@ class hornyCog(commands.Cog):
             random_color = randint(0, 0xFFFFFF)
             horny_percentage = random.randint(1, 100)
             
-            # Use PNG format for avatar
-            avatar_url = str(user.avatar.with_format('png').url)
+            # Use display_avatar format for avatar
+            avatar_url = str(user.display_avatar.with_format('png').url)
 
             resulting_image = generate_percentage_image_full_image(avatar_url, horny_percentage)
             byte_array = io.BytesIO()
@@ -118,5 +118,4 @@ class hornyCog(commands.Cog):
             await ctx.response.send_message("An error occurred. Please try again later.")
 
 def setup(bot):
-    bot.add_cog(hornyCog(bot))
-
+    bot.add_cog(HornyCog(bot))
