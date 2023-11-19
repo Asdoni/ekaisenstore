@@ -17,7 +17,7 @@ from cogs.ChatGPT.chatgpt import ChatGPT
 from cogs.Translator.translator import TranslatorCog
 #from cogs.Kiwi_Game.kiwi import Kiwi
 from cogs.User.avatar import AvatarCog
-from cogs.Horny.horny import hornyCog
+from cogs.Horny.horny import HornyCog
 #from cogs.Loot_Tracker.loot import SheetsCog
 from cogs.PeePee.peepee import PP
 from cogs.Trivia.trivia import Trivia
@@ -101,7 +101,7 @@ async def setup_cogs():
                 ChatGPT(bot),
                 TranslatorCog(bot),
                 AvatarCog(bot),
-                hornyCog(bot),
+                HornyCog(bot),
                 Leonardo(bot),
                 Anime(bot),
                 EmojiCog(bot),
