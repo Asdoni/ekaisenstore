@@ -44,6 +44,7 @@ from cogs.User.echo import Echo
 from cogs.User.snipe import Snipe
 from cogs.NNK.redeem import CouponCog
 from cogs.NNK.helpme import HelpMe
+from cogs.Utility.roll import RollCog
 
 
 # Set up logging.
@@ -110,6 +111,7 @@ async def setup_cogs():
                 Snipe(bot),
                 CouponCog(bot),
                 HelpMe(bot),
+                RollCog(bot),
                 ]
     for ext in cogslist:
         try:
