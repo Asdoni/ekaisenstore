@@ -1,28 +1,25 @@
-import asyncio
 import os
-
+import aiohttp
+import asyncio
 import discord
 import openai
-import requests.exceptions
-from discord import app_commands, Message
+from discord import app_commands, Message, Embed
 from discord.ext import commands
 
-# Constants
 from bot import EGirlzStoreBot
 from currencyExchangeRate import get_usd_exchange_rate
 from formatter import format_number
 
+# Constants
 MAX_HISTORY = 1
-TOKEN_COST_GPT35 = {'input': 0.001 / 1000, 'output': 0.002 / 1000}  # Costs in $ per token for GPT-3.5
-TOKEN_COST_GPT4 = {'input': 0.01 / 1000, 'output': 0.03 / 1000}  # Costs in $ per token for GPT-4
-
+TOKEN_COST_GPT35 = {'input': 0.001 / 1000, 'output': 0.002 / 1000}
+TOKEN_COST_GPT4 = {'input': 0.01 / 1000, 'output': 0.03 / 1000}
 MIN_COST_DISPLAY = 0.0001
 MAX_EMBED_DESCRIPTION_LENGTH = 4096
-
-# Environment variables
-openai.api_key = os.getenv('OPENAI_KEY')
-
-tones = {
+OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
+MODEL_GPT4 = 'gpt-4-1106-preview'
+MODEL_GPT35 = 'gpt-3.5-turbo-1106'
+TONES = {
     0: ["Normal", "Respond normally: "],
     1: ["Angry", "Respond angrily: "],
     2: ["Foolish", "Respond foolishly: "],
@@ -50,16 +47,16 @@ tones = {
     24: ["Drunk", "Respond like a drunk man: "],
 }
 
+# Environment variables
+openai.api_key = os.getenv('OPENAI_KEY')
 
 def split_message(message: str, length: int) -> [str]:
     return [message[i:i + length] for i in range(0, len(message), length)]
 
-
 def apply_tone(messages_payload, user_tone):
-    if user_tone in tones and user_tone:
-        messages_payload[-1]["content"] = tones[user_tone][1] + messages_payload[-1]["content"]
+    if user_tone in TONES and user_tone:
+        messages_payload[-1]["content"] = TONES[user_tone][1] + messages_payload[-1]["content"]
     return messages_payload
-
 
 def calculate_cost(user_question, bot_answer, model):
     input_tokens = len(user_question.split())
@@ -74,7 +71,6 @@ def calculate_cost(user_question, bot_answer, model):
     total_tokens_used = input_tokens + output_tokens
     return total_cost, total_tokens_used
 
-
 async def send_bot_response(message, bot_answer, total_cost, total_tokens_used, user_tone, model_used):
     eur_cost = total_cost * get_usd_exchange_rate("EUR")
     cost_display = (
@@ -83,7 +79,7 @@ async def send_bot_response(message, bot_answer, total_cost, total_tokens_used, 
         else f"< €{format_number(MIN_COST_DISPLAY, 4)}"
     )
     # Get the tone name, default to "Unknown" if not found
-    tone_display = tones.get(user_tone)[0] if user_tone in tones else "Unknown"
+    tone_display = TONES.get(user_tone)[0] if user_tone in TONES else "Unknown"
     model_display = "GPT-4" if model_used.startswith("gpt-4") else "GPT-3.5"
 
     for part in split_message(bot_answer, MAX_EMBED_DESCRIPTION_LENGTH):
@@ -95,7 +91,6 @@ async def send_bot_response(message, bot_answer, total_cost, total_tokens_used, 
             )
         )
         await message.reply(embed=embed)
-
 
 class ChatGPT(commands.Cog):
     def __init__(self, bot: EGirlzStoreBot):
@@ -124,7 +119,6 @@ class ChatGPT(commands.Cog):
         ]
         # Fetch user's preferred tone
         user_tone = await self.fetch_user_tone(message.author.id)
-
         asyncio.create_task(self.process_message(message, user_question, user_history, user_tone, premium_guild))
 
     async def fetch_user_tone(self, user_id):
@@ -166,42 +160,28 @@ class ChatGPT(commands.Cog):
             "Authorization": f"Bearer {openai.api_key}",
             "Content-Type": "application/json"
         }
-        model = "gpt-4-1106-preview" if premium_guild == 2 else "gpt-3.5-turbo-1106"
+        model = MODEL_GPT4 if premium_guild == 2 else MODEL_GPT35
         data = {
             "model": model,
             "messages": messages_payload,
             "max_tokens": 4096,
             "temperature": 0.5,
         }
-        try:
-            with self.bot.http_session.post(
-                    'https://api.openai.com/v1/chat/completions',
-                    headers=headers,
-                    json=data,
-            ) as resp:
-                if resp.status_code == 200:
-                    return resp.json()
+        async with aiohttp.ClientSession() as session:
+            async with session.post(OPENAI_API_URL, headers=headers, json=data) as resp:
+                if resp.status == 200:
+                    return await resp.json()
                 else:
-                    self.bot.logger.error(f"OpenAI API error: {resp.status_code} - {resp.text}")
-                    return None
-        except requests.exceptions.ConnectTimeout:
-            self.bot.logger.error("The request timed out")
-        except requests.exceptions.HTTPError as e:
-            self.bot.logger.error(f"An HTTP client error occurred: {e}")
-        # You can catch any other specific exceptions you want here
+                    self.bot.logger.error(f"OpenAI API error: {resp.status} - {await resp.text()}")
+
         return None
 
     @app_commands.command(description="Set your preferred tone for ChatGPT responses.")
-    @app_commands.choices(tone=[app_commands.Choice(name=val[0], value=key) for key, val in tones.items()])
+    @app_commands.choices(tone=[app_commands.Choice(name=val[0], value=key) for key, val in TONES.items()])
     async def tone(self, interaction: discord.Interaction, tone: app_commands.Choice[int]):
-        await self.bot.db.commit(
-            (
-                f"REPLACE INTO user_preferences (user_id, tone) "
-                f"VALUES ({interaction.user.id}, {tone.value})"
-            )
-        )
+        query = "REPLACE INTO user_preferences (user_id, tone) VALUES (%s, %s)"
+        await self.bot.db.commit(query, (interaction.user.id, tone.value))
         await interaction.response.send_message(f"Your preferred tone has been set to {tone.name}.", ephemeral=True)
-
 
 async def setup(bot: EGirlzStoreBot):
     await bot.add_cog(ChatGPT(bot))
