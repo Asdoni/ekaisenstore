@@ -1,5 +1,6 @@
-from flask import Flask, request, render_template, jsonify, redirect, url_for
 import json
+
+from flask import Flask, request, render_template, jsonify, redirect, url_for
 
 app = Flask(__name__, static_url_path='/static')
 
@@ -7,25 +8,30 @@ app = Flask(__name__, static_url_path='/static')
 with open('config.json', 'r') as config_file:
     config_data = json.load(config_file)
 
+
 # Define a route for the root URL ("/")
 @app.route('/')
 def index():
     # Render the index.html template and pass the config data to it
     return render_template('index.html', config=config_data)
 
+
 @app.route('/pages/commands')
 def commands():
     return render_template('pages/commands.html')
 
+
 @app.route('/pages/about')
 def about():
     return render_template('pages/about.html')
+
 
 # Define a route for the Bot Configuration page
 @app.route('/config')
 def config_page():
     # Pass the config_data dictionary to the template
     return render_template('config.html', config=config_data)
+
 
 # Add separate routes for updating each configuration value
 
@@ -54,6 +60,7 @@ def set_config():
     response = {'message': 'Configuration edited correctly'}
     return jsonify(response)
 
+
 # Create separate routes for updating specific configuration values
 @app.route('/set_token', methods=['POST'])
 def set_token():
@@ -68,10 +75,11 @@ def set_token():
         response = {'message': 'Bot Token edited correctly'}
         return jsonify(response)
 
+
 @app.route('/set_prefix', methods=['POST'])
 def set_prefix():
     new_prefix = request.form.get('prefix')
-    
+
     # Update the prefix in your config_data
     config_data['prefix'] = new_prefix
 
@@ -83,10 +91,11 @@ def set_prefix():
     response = {'message': 'Prefix edited correctly'}
     return jsonify(response)
 
+
 @app.route('/set_dingo_description', methods=['POST'])
 def set_dingo_description():
     new_dingo_description = request.form.get('dingo_description')
-    
+
     # Update the dingo_description in your config_data
     config_data['dingo_description'] = new_dingo_description
 
@@ -111,7 +120,8 @@ def set_welcome_message():
         # Return a JSON response indicating success
         response = {'message': 'Welcome Message edited correctly'}
         return jsonify(response)
-    
+
+
 # Define a route for updating throw_items
 @app.route('/update_throw_items', methods=['POST'])
 def update_throw_items():
@@ -129,6 +139,7 @@ def update_throw_items():
     # Redirect back to the page with the updated list
     return redirect(url_for('index'))
 
+
 # Define a route for the /throw_items page
 @app.route('/throw_items')
 def throw_items():
@@ -137,6 +148,7 @@ def throw_items():
         throw_items_data = json.load(throw_items_file)
     # Render the throw_items.html template and pass the throw_items list to it
     return render_template('throw_items.html', throw_items=throw_items_data['items'])
+
 
 # Ensure this is the last line in your Flask application
 if __name__ == '__main__':
