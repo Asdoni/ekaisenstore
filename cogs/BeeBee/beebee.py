@@ -1,16 +1,12 @@
 import random
-
 from discord import app_commands, Embed
 from discord.ext import commands
 
-# Create a dictionary for cup sizes
 from bot import EGirlzStoreBot
-
 
 def get_booby_line(size: int, amount=2) -> str:
     spaces = ' \u200B' * size
     return f'({spaces}.{spaces})' * amount
-
 
 class BB(commands.Cog):
     def __init__(self, bot: EGirlzStoreBot):
