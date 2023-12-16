@@ -1,16 +1,16 @@
-import discord
-from discord.ext import commands
-from discord import app_commands
 import asyncio
-import random
 import json
-from datetime import datetime
-import pytz
 import os
+import random
+from datetime import datetime
 
-def is_allowed_role(ctx):
-    allowed_roles = ['Admin', 'Best Egirls']
-    return any(role.name in allowed_roles for role in ctx.author.roles)
+import discord
+import pytz
+from discord import app_commands
+from discord.ext import commands
+
+from bot import EGirlzStoreBot
+from oldCommandCustomErrors import is_allowed_guild
 
 # Define the time zone using pytz (e.g., UTC+2)
 time_zone = pytz.timezone('Europe/Amsterdam')
@@ -24,12 +24,12 @@ current_time_str = current_time.strftime("%H:%M")
 # Define a dictionary to store user rolls during the timer
 user_rolls = {}
 
+
 class Dingo(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: EGirlzStoreBot):
         self.bot = bot
         self.is_dingo_timer_active = False
         self.user_rolls = {}  # Use the class-level dictionary
-        self.allowed_guild_ids = [1062323948840296459]
 
         current_directory = os.path.dirname(os.path.abspath(__file__))
         dingo_json_path = os.path.join(current_directory, 'dingo.json')
@@ -38,11 +38,9 @@ class Dingo(commands.Cog):
             dingo_data = json.load(dingo_file)
             self.dingo_message = dingo_data.get('dingo_message', '')
 
-    async def cog_check(self, ctx):
-        return ctx.guild.id in self.allowed_guild_ids
-
     @commands.command(name="dingo")
-    @commands.check(is_allowed_role)
+    @commands.has_permissions(administrator=True)
+    @is_allowed_guild([1062323948840296459])
     async def dingo(self, ctx):
         self.is_dingo_timer_active = True
         await ctx.message.delete()
@@ -82,7 +80,7 @@ class Dingo(commands.Cog):
         self.is_dingo_timer_active = False
 
     async def display_roll_results(self, ctx):
-    # After all intervals are done, post the "ROLL CLOSED" message
+        # After all intervals are done, post the "ROLL CLOSED" message
         def create_embed(title, description, color):
             return discord.Embed(
                 title=title,
@@ -126,7 +124,7 @@ class Dingo(commands.Cog):
                     if min_range <= roll <= max_range:
                         return emote
                 return ""
-            
+
             embed_field_value = ""
             for user_id in sorted_users:
                 user = ctx.guild.get_member(user_id)
@@ -135,7 +133,7 @@ class Dingo(commands.Cog):
                 emote = get_roll_emote(rolls[0])
                 user_mention = f"<@!{user_id}>"
                 roll_info = f"{user_mention} {emote} (Rolls: {rolls_str}) {emote}\n"
-                
+
                 # Check if adding the next user would exceed the field value limit
                 if len(embed_field_value) + len(roll_info) > 1024:
                     # Add the field to the current embed
@@ -146,7 +144,8 @@ class Dingo(commands.Cog):
                     )
                     # Send the current embed and create a new one
                     await ctx.send(embed=roll_closed_embed)
-                    roll_closed_embed = create_embed(title="ROLL CLOSED (Continued)", description="", color=discord.Color.random())
+                    roll_closed_embed = create_embed(title="ROLL CLOSED (Continued)", description="",
+                                                     color=discord.Color.random())
                     embed_field_value = roll_info  # Start with the next user's info
                 else:
                     embed_field_value += roll_info
@@ -201,7 +200,9 @@ class Dingo(commands.Cog):
             }
 
             # Find the corresponding emote for the roll result
-            emote = next((emote for (min_range, max_range), emote in emotes.items() if min_range <= random_number <= max_range), "")
+            emote = next(
+                (emote for (min_range, max_range), emote in emotes.items() if min_range <= random_number <= max_range),
+                "")
 
             embed = discord.Embed(
                 title="🎲 Roll the Dice 🎲",
@@ -210,8 +211,7 @@ class Dingo(commands.Cog):
             )
 
             author_name = ctx.author.display_name
-            author_avatar_url = ctx.author.avatar.url if ctx.author.avatar else ctx.author.default_avatar.url
-            embed.set_author(name=author_name, icon_url=author_avatar_url)
+            embed.set_author(name=author_name, icon_url=ctx.author.display_avatar.url)
 
             await ctx.send(embed=embed)
 
@@ -231,25 +231,7 @@ class Dingo(commands.Cog):
             await ctx.followup.send(f"The current time is {current_time_str} (UTC+2).")
         except Exception as e:
             await ctx.followup.send("An error occurred while processing your request.")
-           
-    @commands.Cog.listener()
-    async def on_command_error(self, ctx, error):
-        if isinstance(error, commands.CheckFailure):
-            await ctx.send(f"You do not have the necessary permissions to use the `{ctx.command}` command.")
 
-        # Only try to delete the message if it exists and if it's not already deleted
-        try:
-            if ctx.message:
-                await ctx.message.delete()
-        except discord.errors.NotFound:
-            pass
 
-        # Specific error handling for the "dingo" command
-        if ctx.command and ctx.command.qualified_name == "dingo":
-            if isinstance(error, commands.MissingRequiredArgument):
-                await ctx.send(f"Incorrect syntax. Correct syntax: `{ctx.prefix}dingo`")
-            elif isinstance(error, commands.BadArgument):
-                await ctx.send(f"Invalid argument. Correct syntax: `{ctx.prefix}dingo`")
-
-def setup(bot):
-    bot.add_cog(Dingo(bot))
+async def setup(bot: EGirlzStoreBot):
+    await bot.add_cog(Dingo(bot))

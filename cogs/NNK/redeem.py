@@ -1,15 +1,17 @@
+import asyncio
+import logging
+import os
+import random
+from concurrent.futures import ThreadPoolExecutor
+
 import discord
+import requests
 from discord import app_commands
 from discord.ext import commands
-import requests
-import aiomysql
-import os
-from concurrent.futures import ThreadPoolExecutor
-import asyncio
-import random
-import logging
 
 # Configure logging at the beginning of your script
+from bot import EGirlzStoreBot
+
 logging.basicConfig(filename='myapp.log', level=logging.INFO)
 
 DB_CONFIG = {
@@ -20,18 +22,11 @@ DB_CONFIG = {
     'db': os.getenv('DB_NAME'),
 }
 
+
 class CouponCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: EGirlzStoreBot):
         self.bot = bot
         self.executor = ThreadPoolExecutor()
-
-    async def db_execute(self, query, params=None):
-        async with aiomysql.create_pool(**DB_CONFIG) as pool:
-            async with pool.acquire() as conn:
-                async with conn.cursor() as cursor:
-                    await cursor.execute(query, params)
-                    await conn.commit()
-                    return await cursor.fetchall()
 
     def send_coupon_rewards(self, code, pid_ids):
         error = False
@@ -67,16 +62,12 @@ class CouponCog(commands.Cog):
         name="pid",
         description="Set your PID in the database"
     )
-    async def set_pid(self, interaction: discord.Interaction, set: str):
-        await self.db_execute(
-            """
-            INSERT INTO user_pids (user_id, pid) VALUES (%s, %s) AS new_values
-            ON DUPLICATE KEY UPDATE pid = new_values.pid
-            """,
-            (interaction.user.id, set)
+    async def set_pid(self, interaction: discord.Interaction, pid: str):
+        await self.bot.db.commit(
+            "REPLACE INTO user_pids (user_id, pid) VALUES (%s, %s)",
+            (interaction.user.id, pid)
         )
-        await interaction.response.send_message(f"PID set to {set} for {interaction.user.mention}", ephemeral=True)
-
+        await interaction.response.send_message(f"PID set to {pid} for {interaction.user.mention}", ephemeral=True)
 
     @app_commands.command(
         name="redeem",
@@ -86,16 +77,20 @@ class CouponCog(commands.Cog):
     async def redeem_coupon_code(self, interaction: discord.Interaction, code: str):
         await interaction.response.defer(ephemeral=False)
 
-        res = await self.db_execute('SELECT user_id, pid FROM user_pids')
+        res = await self.bot.db.fetchall('SELECT user_id, pid FROM user_pids')
         pid_to_user_id = {row[1]: row[0] for row in res}
 
         loop = asyncio.get_event_loop()
-        error, pid_errors = await loop.run_in_executor(self.executor, self.send_coupon_rewards, code,
-                                                    pid_to_user_id.keys())
+        error, pid_errors = await loop.run_in_executor(
+            self.executor,
+            self.send_coupon_rewards,
+            code,
+            pid_to_user_id.keys(),
+        )
 
         embeds = []
         current_embed = discord.Embed(title="Redeem Code Results", description=f"Redeem Code: `{code}`",
-                                    color=random.randint(0, 0xFFFFFF))
+                                      color=random.randint(0, 0xFFFFFF))
         embeds.append(current_embed)
         user_list_value = ""
 
@@ -105,7 +100,10 @@ class CouponCog(commands.Cog):
 
             if len(user_list_value) + len(new_entry) > 1024:
                 current_embed.add_field(name="User List", value=user_list_value, inline=False)
-                current_embed = discord.Embed(title="Redeem Code Results (continued)", color=random.randint(0, 0xFFFFFF))
+                current_embed = discord.Embed(
+                    title="Redeem Code Results (continued)",
+                    color=random.randint(0, 0xFFFFFF),
+                )
                 embeds.append(current_embed)
                 user_list_value = new_entry  # Start with the new entry in the new embed
             else:
@@ -120,6 +118,6 @@ class CouponCog(commands.Cog):
             embed.set_footer(text="Redeem operation completed.")
             await interaction.followup.send(embed=embed)
 
-            
-async def setup(bot):
+
+async def setup(bot: EGirlzStoreBot):
     await bot.add_cog(CouponCog(bot))

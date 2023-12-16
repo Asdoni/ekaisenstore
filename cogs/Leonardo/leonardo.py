@@ -1,19 +1,17 @@
-from discord.ext import commands
-from discord import app_commands
-from discord import Embed
-import aiohttp
-import discord
-import json
 import asyncio
-import logging
 import io
+import json
 import os
+
+import discord
+from discord import Embed
+from discord import app_commands
+from discord.ext import commands
+
+from bot import EGirlzStoreBot
 
 leonardokey = os.environ.get('LEONARDO_KEY')
 user_id = 209748857683312640  # Replace with your Discord user ID, This is where the images will be sent
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 style_descriptions = {
     "ABSTRACT_CITYSCAPE": "abstract cityscape, Ultra Realistic Cinematic Light abstract, futuristic, cityscape, out of focus background and incredible 16k resolution produced in Unreal Engine 5 and Octane Render",
@@ -173,17 +171,18 @@ style_descriptions = {
 
 
 class Leonardo(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: EGirlzStoreBot):
         self.bot = bot
 
     async def fetch_generated_image(self, generation_id):
-        async with aiohttp.ClientSession() as session:
+        with self.bot.http_session as session:
             for _ in range(240):
                 await asyncio.sleep(1)
-                async with session.get(f'https://egirlzstore-eecf73f90a6c.herokuapp.com/check_status/{generation_id}', ssl=False) as response:
-                    text = await response.text()
-                    if response.status == 200:
-                        data_response = await response.json()
+                with session.get(
+                        f'https://egirlzstore-eecf73f90a6c.herokuapp.com/check_status/{generation_id}',
+                ) as response:
+                    if response.status_code == 200:
+                        data_response = response.json()
                         image_urls = data_response.get('image_urls', [])
                         if image_urls:
                             return [{"url": url, "id": idx} for idx, url in enumerate(image_urls)]
@@ -206,9 +205,9 @@ class Leonardo(commands.Cog):
             'modelId': 'ac614f96-1082-45bf-be9d-757f2d31c174',
             'width': 512,
             'height': 512,
-            "sd_version": "v1.5",        
-            'promptMagic': False,  
-            'highContrast': False, 
+            "sd_version": "v1.5",
+            'promptMagic': False,
+            'highContrast': False,
             "alchemy": False,
             "contrastRatio": 0.5,
             "expandedDomain": True,
@@ -216,30 +215,25 @@ class Leonardo(commands.Cog):
             "presetStyle": "ANIME",
             "promptMagicVersion": "v3",
             "guidance_scale": 15,
-            "init_strength": 0.55,                
-            "num_images": 4, 
-                                                                    
+            "init_strength": 0.55,
+            "num_images": 4,
+
         }
-        
+
         """
         Generate an image based on the provided user input and optional parameters.
         Parameters:
         user_input: The entire input string from the user.
         """
-        #Define Models
-        models = {
 
-
-        }        
-        
-    # If the user does not provide a style, add the default style
+        # If the user does not provide a style, add the default style
         if "--s" not in user_input:
             if "--ar" in user_input:
                 # Split the user input at '--ar' and insert '--s HQL' before it
                 parts = user_input.split("--ar")
                 user_input = parts[0].strip() + " --s HQL --ar" + parts[1].strip()
             else:
-                user_input += " --s HQL"    
+                user_input += " --s HQL"
 
         # Extracting parameters from user input and updating the default values
         if "--ar" in user_input:
@@ -256,45 +250,51 @@ class Leonardo(commands.Cog):
             if style_code in style_descriptions:
                 user_input = f"{user_input}, {style_descriptions[style_code]}"
             user_input = user_input.replace(f" {style_code}", "").strip()
-            
+
         # Remove '--s' from the user input
-        user_input = user_input.replace("--s", "").strip()        
+        user_input = user_input.replace("--s", "").strip()
 
         # Update the prompt in the data dictionary
         data['prompt'] = user_input
-        
+
         # Here, after processing the user input, send the notification message:
-        embed = Embed(description=f"'{user_input}' - added to the Queue, please be patient, Depending on server load, Generation takes anywhere from 20 seconds to 2 mins.", color=0x0000ff)  # 0x0000ff is blue
+        embed = Embed(
+            description=(
+                f"'{user_input}' - added to the Queue, please be patient, Depending on server load,"
+                f" Generation takes anywhere from 20 seconds to 2 mins."
+            ),
+            color=0x0000ff,  # 0x0000ff is blue
+        )
         await ctx.response.send_message(embed=embed)
 
-        # Serialize the entire data dictionary
-        serialized_data = json.dumps(data)
+        self.bot.logger.debug(f"Serialized Data to be sent: {json.dumps(data)}")
 
-        # Debugging: Print the serialized data before sending
-        print("Serialized Data to be sent:", serialized_data)
-
-        # Fetch the desired channel
-        target_channel = ctx.channel
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post('https://egirlzstore-eecf73f90a6c.herokuapp.com/generate_image/', json=data, ssl=False) as response:
-                    if response.status == 200:
-                        data_response = await response.json()
-                        generation_id = data_response['sdGenerationJob']['generationId']
-                        outputs = await self.fetch_generated_image(generation_id)
-                        if outputs:
-                            for output in outputs:
-                                image_url = output['url']
-                                async with session.get(image_url, ssl=False) as image_response:
-                                    image_data = await image_response.read()
-                                    await ctx.followup.send(file=discord.File(io.BytesIO(image_data), f"generated_image_{output['id']}.jpg"))
-                        else:
-                            await ctx.followup.send(content="Error: Image generation took too long or encountered an error.")
+        with self.bot.http_session as session:
+            with session.post(
+                    'https://egirlzstore-eecf73f90a6c.herokuapp.com/generate_image/',
+                    json=data,
+            ) as response:
+                if response.status_code == 200:
+                    data_response = response.json()
+                    generation_id = data_response['sdGenerationJob']['generationId']
+                    outputs = await self.fetch_generated_image(generation_id)
+                    if outputs:
+                        for output in outputs:
+                            image_url = output['url']
+                            with session.get(image_url) as image_response:
+                                image_data = image_response.content
+                                await ctx.followup.send(
+                                    file=discord.File(
+                                        io.BytesIO(image_data),
+                                        f"generated_image_{output['id']}.jpg",
+                                    )
+                                )
                     else:
-                        logger.error(f"Received status code {response.status} from the server.")
-        except Exception as e:
-            logger.error(f"An error occurred: {str(e)}")
+                        await ctx.followup.send(
+                            content="Error: Image generation took too long or encountered an error.")
+                else:
+                    self.bot.logger.error(f"Received status code {response.status_code} from the server.")
 
-def setup(bot):
-    bot.add_cog(Leonardo(bot))
+
+async def setup(bot: EGirlzStoreBot):
+    await bot.add_cog(Leonardo(bot))

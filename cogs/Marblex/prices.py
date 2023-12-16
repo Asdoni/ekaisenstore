@@ -1,250 +1,204 @@
-import os
-import requests
-import urllib3
-import ssl
-import discord
+from typing import Optional, List, Literal, get_args
+
+from discord import app_commands, Embed, Color, Interaction, File
 from discord.ext import commands
-from discord import app_commands, Embed, Color, Interaction
 
-# Get the API key from an environment variable
-exchange_api_key = os.getenv('EXCHANGE')
+from bot import EGirlzStoreBot
+from currencyExchangeRate import get_usd_exchange_rate
+from formatter import format_number
 
-def get_usd_to_eur_exchange_rate():
-    # Assuming you have an API that provides the USD to EUR exchange rate
-    url = f'https://api.exchangeratesapi.io/latest?access_key={exchange_api_key}&symbols=EUR'
-    response = requests.get(url)
-    data = response.json()
-    # Make sure to handle errors and check if 'EUR' is in the response
-    return data.get('rates', {}).get('EUR', 1)  # Default to 1 if not found
+token_choices = [
+    app_commands.Choice(name="NKA", value="NKA"),
+    app_commands.Choice(name="Asterite", value="NKA Asterite"),
+    app_commands.Choice(name="NKT", value="NKT"),
+    app_commands.Choice(name="Territe", value="NKT Territe"),
+    app_commands.Choice(name="MBX", value="MBX"),
+]
+currency_choices = [
+    app_commands.Choice(name="Euro", value="EUR"),
+    app_commands.Choice(name="US-Dollar", value="USD"),
+    app_commands.Choice(name="British Pound", value="GBP"),
+]
+currency_with_mbx = currency_choices+[app_commands.Choice(name="MARBLEX", value="MBX")]
+ExchangeRateToken = Literal['NKT', 'NKA']
 
-class CustomHttpAdapter(requests.adapters.HTTPAdapter):
-    # "Transport adapter" that allows us to use custom ssl_context.
-    def __init__(self, ssl_context=None, **kwargs):
-        self.poolmanager = None
-        self.ssl_context = ssl_context
-        super().__init__(**kwargs)
 
-    def init_poolmanager(self, connections, maxsize, block=False):
-        self.poolmanager = urllib3.poolmanager.PoolManager(
-            num_pools=connections,
-            maxsize=maxsize,
-            block=block,
-            ssl_context=self.ssl_context
-        )
+def get_token_file(token_type="nka") -> File:
+    return File(f'./cogs/Marblex/{token_type}.png', filename=f"{token_type}.png")
 
-def get_legacy_session():
-    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-    ctx.options |= 0x4  # OP_LEGACY_SERVER_CONNECT
-    session = requests.Session()
-    session.mount('https://', CustomHttpAdapter(ctx))
-    return session
 
 class MarblexCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: EGirlzStoreBot):
         self.bot = bot
 
+    @app_commands.choices(currency=currency_choices)
     @app_commands.command(name="tokenprices")
-    async def tokenprices(self, interaction: Interaction):
+    async def tokenprices(self, interaction: Interaction, currency: Optional[str] = "EUR"):
         """Fetches the current prices of tokens."""
         await interaction.response.defer(ephemeral=False)
-        await self.fetch_token_prices(interaction)
-
-    async def fetch_token_prices(self, interaction: Interaction):
         try:
-            nkt = self.get_token_data('NKT')
-            nka = self.get_token_data('NKA')
-
-            if not nkt or not nka:
-                raise ValueError("Failed to fetch token data")
-            
-            # Assuming mbx.png is in the same directory as your other images
-            marblex_image_path = './cogs/Marblex/mbx.png'
-
-            with open(marblex_image_path, 'rb') as marblex_img:
-                marblex_file = discord.File(marblex_img, filename="mbx.png")
-                marblex_url = "attachment://mbx.png"
-
-                embed = discord.Embed(title="Token Prices", color=discord.Color.gold())
-                embed.set_thumbnail(url=marblex_url)
-
-
-                # Add NKT fields
-                embed.add_field(
-                name="**-------------------------------**",
-                value=(
-                    "**NKT (Territe Token)**\n"
-                    f"**EUR:** €{nkt['price']}\n"
-                    f"**Percent:** {nkt['percent']}\n"
-                    f"**Exchange-Rate:** {nkt['exchangeRateFormatted']}\n"
-                    "**-------------------------------**\n"
-                    "**NKA (Asterite Token)**\n"
-                    f"**EUR:** €{nka['price']}\n"
-                    f"**Percent:** {nka['percent']}\n"
-                    f"**Exchange-Rate:** {nka['exchangeRateFormatted']}"
-                ),
-                inline=False
-                )               
-
-                # Add NKA fields
-                #embed.add_field(
-                #    name="NKA (Asterite Token)",
-                #    value=f"**EUR:** €{nka['price']} \n**Percent:** {nka['percent']} \n**Exchange-Rate:** {nka['exchangeRateFormatted']}",
-                #    inline=False
-                #)
-                await interaction.followup.send(files=[marblex_file], embed=embed)
-
-        except Exception as e:
+            token_vals = self.get_token_values(['NKT', 'NKA', 'MBX'])
+            assert token_vals
+            marblex_file = File('./cogs/Marblex/mbx.png', filename="mbx.png")
+            embed = Embed(title="Token Prices", color=Color.gold())
+            embed.set_thumbnail(url="attachment://mbx.png")
+            seperator = "**-------------------------------**"
+            curr_rate = get_usd_exchange_rate(currency)
+            mbx_data = token_vals['MBX']
+            mbx_price = mbx_data['price'] * curr_rate
+            for key, token in token_vals.items():
+                price = token["price"] * curr_rate
+                ex_str = ''
+                if 'mbx_value' and 'exchangeRate' in token:
+                    # assume its nkt/nka or other game-token
+                    ex_rate = token['exchangeRate']
+                    ex_str = f'\n**Exchange-Rate:** {ex_rate["rate_formatted"]} {ex_rate["emoji"]}'
+                    mbx_str = f'\n**{key}/MBX:** {format_number(token["mbx_value"], 4)}'
+                else:
+                    # assume its mbx
+                    mbx_str = "\n"+"\n".join(
+                        [
+                            f'**MBX/{t}:** {format_number(mbx_price/(token_vals[t]["price"]*curr_rate), 4)}'
+                            for t in ['NKA', 'NKT']
+                        ]
+                    )
+                title = f'**{token["name"]} ({key})**'
+                price_str = f'\n**{currency}:** {format_number(price, 4)}'
+                percent_str = f'\n**Percent:** {token["percent"]} {token["emoji"]}'
+                embed.add_field(name=seperator, value=f'{title}{price_str}{percent_str}{ex_str}{mbx_str}', inline=False)
+            await interaction.followup.send(files=[marblex_file], embed=embed)
+        except AssertionError as e:
             embed = Embed(title=":warning: Error", description="Failed to fetch token prices.", color=Color.red())
             embed.add_field(name="Details", value=str(e), inline=False)
             await interaction.followup.send(embed=embed)
 
+    @app_commands.choices(token=token_choices)
+    @app_commands.choices(currency=currency_with_mbx)
+    @app_commands.command(name="token_to_currency")
+    async def convert_token_to_currency(
+            self,
+            interaction: Interaction,
+            amount: app_commands.Range[int, 1, None],
+            token: Optional[str] = "NKA Asterite",
+            currency: Optional[str] = "EUR",
+    ):
+        """Calculates the currency cost for a given amount of tokens."""
+        await self.convert_command(interaction, amount=amount, token_type=token, currency=currency)
 
-    def get_token_data(self, token_type):
-        url = f'https://ninokuni-token.netmarble.com/api/price?tokenType={token_type}'
-        exchange_url = f'https://ninokuni-token.netmarble.com/api/exchangeRate?tokenType={token_type}'
+    @app_commands.choices(currency=currency_with_mbx)
+    @app_commands.choices(token=token_choices)
+    @app_commands.command(name="currency_to_token")
+
+    async def convert_currency_to_token(
+            self,
+            interaction: Interaction,
+            amount: app_commands.Range[int, 1, None],
+            currency: Optional[str] = "EUR",
+            token: Optional[str] = "NKA Asterite",
+    ):
+        """Calculates the token amount for a given amount of currency."""
+        await self.convert_command(interaction, amount, token, currency, is_to_currency=False)
+
+    def get_token_exchange_rate(self, token_type: ExchangeRateToken) -> dict:
         ret = {}
-
-        session = get_legacy_session()
-        res = session.get(url)
-        ex_res = session.get(exchange_url)
-
+        url = f'https://ninokuni-token.netmarble.com/api/exchangeRate?tokenType={token_type}'
+        res = self.bot.http_session.get(url)
         if res.status_code == 200:
-            usd = res.json()['currencies']['USD']
-            usd_value = float(f"{usd['priceMajor']}.{usd['priceMinor']}")
-            ret['price'] = f"{usd_value:.4f}"  # Formats the price to 4 decimal places
-
-            # Directly use the current percent value to determine the trend
-            percent_value = float(f"{usd['percentMajor']}.{usd['percentMinor']}")
-            percent_trend_emoji = ':chart_with_downwards_trend:' if percent_value < 0 else ':chart_with_upwards_trend:'
-            ret['percent'] = f"{percent_value:.2f}% {percent_trend_emoji}"  # Formats the percent to 2 decimal places and adds trend emoji
-
-
-        if ex_res.status_code == 200:
-            data = ex_res.json()
-            current_exchange_rate = float(data['result'][-1]['exchangeRate'])
-            previous_exchange_rate = float(data['result'][-2]['exchangeRate']) if len(data['result']) > 1 else current_exchange_rate
-            increase = current_exchange_rate - previous_exchange_rate
-            trend_emoji = ':chart_with_upwards_trend:' if increase >= 0 else ':chart_with_downwards_trend:'
-            increase_str = f"({'+' if increase >= 0 else ''}{int(increase) if increase.is_integer() else increase})"
-            ret['exchangeRate'] = int(current_exchange_rate) if current_exchange_rate.is_integer() else current_exchange_rate
-            ret['exchangeRateFormatted'] = f"{ret['exchangeRate']}{increase_str} {trend_emoji}"
-            ret['increaseExchangeRate'] = data['result'][-1]['increaseExchangeRate']
+            data = res.json()['result'][-1]
+            ex_rate = int(data['exchangeRate'])
+            increase = int(data['increaseExchangeRate'])
+            ret['rate'] = ex_rate
+            ret['rate_formatted'] = f"{ex_rate} ({increase})"
+            ret['increase'] = increase
+            ret['emoji'] = ':chart_with_upwards_trend:' if increase >= 0 else ':chart_with_downwards_trend:'
         return ret
 
-    @app_commands.command(name="eur_to_asterite")
-    async def convert_nka(self, interaction: Interaction, euros: float):
-        """Converts EUR to NKA (Asterite Token)."""
+    def get_token_values(self, token_types: List[str]) -> dict:
+        ret = {}
+        url = 'https://swap-api.marblex.io/price'
+        res = self.bot.http_session.get(url)
+        if res.status_code == 200:
+            data = res.json()
+            for token_data in data:
+                code = token_data['tokenCode']
+                if code in token_types:
+                    price_data = token_data['priceStatus']
+                    ret[code] = {
+                        'name': token_data['name'],
+                        'code': code,
+                        'emoji': (
+                            ':chart_with_downwards_trend:'
+                            if price_data['status'] == 'Lower'
+                            else ':chart_with_upwards_trend:'
+                        ),
+                        'price': float(price_data['price']),
+                        'percent': f"{price_data['fluctuationRate']} (24h)",
+                    }
+                    if code in get_args(ExchangeRateToken):
+                        ret[code]['exchangeRate'] = self.get_token_exchange_rate(code)
+                        ret[code]['mbx_value'] = float(token_data['baseTokenStatus']['price'])
+        return ret
+
+    async def convert_command(
+            self,
+            interaction: Interaction,
+            amount: float,
+            token_type: str,
+            currency: str,
+            is_to_currency=True
+    ):
         await interaction.response.defer()
-        token_data = self.get_token_data('NKA')
-        if token_data is not None:
-            exchange_rate = get_usd_to_eur_exchange_rate()
-            usd_to_nka = (euros / float(token_data['price'])) * float(token_data['exchangeRate'])
-            usd_to_eur = usd_to_nka * exchange_rate
-            formatted_input = f"€{euros * exchange_rate:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            if formatted_input.endswith(",00"):
-                formatted_input = formatted_input[:-3]
-            formatted_nka = f"{usd_to_eur:,.3f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-            nka_image_path = './cogs/Marblex/nka.png'
-            with open(nka_image_path, 'rb') as nka_img:
-                nka_file = discord.File(nka_img, filename="nka.png")
-                nka_url = "attachment://nka.png"
-                exchange_rate_formatted_no_emoji = token_data['exchangeRateFormatted'].split(' ')[0]
-                embed = Embed(title="Currency Conversion", description=f"With {formatted_input}, you would get {formatted_nka} Asterite", color=Color.green())
-                embed.add_field(name="Exchange Rate", value=f"NKA: {exchange_rate_formatted_no_emoji}", inline=False)
-                embed.set_thumbnail(url=nka_url)
-                footer_text = f"NKA/EUR: €{token_data['price']}"
-                embed.set_footer(text=footer_text)
-                await interaction.followup.send(file=nka_file, embed=embed)
+        is_terr_arr = token_type in ['NKA Asterite', 'NKT Territe']
+        token_name = token_type
+        if is_terr_arr:
+            token_type, token_name = token_type.split(' ')
+        token_data = self.get_token_values([token_type])[token_type]
+        if token_data:
+            token_price = 1 if currency == 'MBX' else token_data['price']
+            if currency == 'MBX':
+                currency_exchange = 1 if token_type == currency else token_data['mbx_value']
+                footer = f"{token_type}/{currency}: {format_number(currency_exchange,4)}"
+            else:
+                currency_exchange = get_usd_exchange_rate(currency)
+                footer = (
+                    f"{token_type}/{currency}: "
+                    f"{format_number(token_data['price'] * currency_exchange,4)}"
+                )
+            exchange_rate = 1
+            rate_data = None
+            if 'exchangeRate' in token_data:
+                rate_data = token_data['exchangeRate']
+                if is_terr_arr:
+                    exchange_rate = rate_data['rate']
+            if is_to_currency:
+                price = (amount / exchange_rate) * token_price * currency_exchange
+                description = (
+                    f"{format_number(amount, 2)} {token_name}"
+                    f" costs **{format_number(price, 2)} {currency}**"
+                )
+            else:
+                tokens = amount / (token_price * currency_exchange)*exchange_rate
+                description = (
+                    f"With {format_number(amount)} {currency} you would get"
+                    f" **{format_number(tokens)} {token_name}**"
+                )
+            embed = Embed(
+                title=f"{token_name} Cost",
+                description=description,
+                color=Color.green(),
+            )
+            if rate_data:
+                embed.add_field(
+                    name="Exchange Rate",
+                    value=f"{token_type}: {rate_data['rate_formatted']}",
+                    inline=False
+                )
+            embed.set_thumbnail(url=f"attachment://{token_type.lower()}.png")
+            embed.set_footer(text=footer)
+            await interaction.followup.send(file=get_token_file(token_type.lower()), embed=embed)
         else:
-            await interaction.followup.send("Failed to fetch NKA data.")
-
-    @app_commands.command(name="eur_to_territe")
-    async def convert_nkt(self, interaction: Interaction, euros: float):
-        """Converts EUR to NKT (Territe Token)."""
-        await interaction.response.defer()
-        token_data = self.get_token_data('NKT')
-        if token_data is not None:
-            exchange_rate = get_usd_to_eur_exchange_rate()
-            usd_to_nkt = (euros / float(token_data['price'])) * float(token_data['exchangeRate'])
-            usd_to_eur = usd_to_nkt * exchange_rate
-            formatted_input = f"€{euros * exchange_rate:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            if formatted_input.endswith(",00"):
-                formatted_input = formatted_input[:-3]
-            formatted_nkt = f"{usd_to_eur:,.3f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-            nkt_image_path = './cogs/Marblex/nkt.png'
-            with open(nkt_image_path, 'rb') as nkt_img:
-                nkt_file = discord.File(nkt_img, filename="nkt.png")
-                nkt_url = "attachment://nkt.png"
-                exchange_rate_formatted_no_emoji = token_data['exchangeRateFormatted'].split(' ')[0]
-                embed = Embed(title="Currency Conversion", description=f"With {formatted_input}, you would get {formatted_nkt} Territe", color=Color.green())
-                embed.add_field(name="Exchange Rate", value=f"NKT: {exchange_rate_formatted_no_emoji}", inline=False)
-                embed.set_thumbnail(url=nkt_url)
-                footer_text = f"NKT/EUR: €{token_data['price']}"
-                embed.set_footer(text=footer_text)
-                await interaction.followup.send(file=nkt_file, embed=embed)
-        else:
-            await interaction.followup.send("Failed to fetch NKT data.")
+            await interaction.followup.send(f"Failed to fetch {token_type} data.")
 
 
-    @app_commands.command(name="asterite_to_eur")
-    async def convert_asterite(self, interaction: Interaction, amount: float):
-        """Calculates the EUR cost for a given amount of Asterite."""
-        await interaction.response.defer()
-        token_data = self.get_token_data('NKA')
-        if token_data is not None:
-            exchange_rate = get_usd_to_eur_exchange_rate()
-            asterite_to_usd = (amount / float(token_data['exchangeRate'])) * float(token_data['price'])
-            asterite_to_eur = asterite_to_usd * exchange_rate
-            formatted_amount = f"{amount:,.0f}".replace(",", ".")  # Format the amount with a period as the thousands separator
-            formatted_eur = f"€{asterite_to_eur:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            if formatted_eur.endswith(",00"):
-                formatted_eur = formatted_eur[:-3]
-            
-            # Send the image only once
-            nka_image_path = './cogs/Marblex/nka.png'
-            with open(nka_image_path, 'rb') as nka_img:
-                nka_file = discord.File(nka_img, filename="nka.png")
-                nka_url = "attachment://nka.png"
-                exchange_rate_formatted_no_emoji = token_data['exchangeRateFormatted'].split(' ')[0]
-                embed = Embed(title="Asterite Cost", description=f"{formatted_amount} Asterite costs {formatted_eur}", color=Color.green())
-                embed.add_field(name="Exchange Rate", value=f"NKA: {exchange_rate_formatted_no_emoji}", inline=False)
-                embed.set_thumbnail(url=nka_url)
-                footer_text = f"NKA/EUR: €{token_data['price']}"
-                embed.set_footer(text=footer_text)
-                await interaction.followup.send(file=nka_file, embed=embed)
-        else:
-            await interaction.followup.send("Failed to fetch NKA data.")
-
-    @app_commands.command(name="territe_to_eur")
-    async def convert_territe(self, interaction: Interaction, amount: float):
-        """Calculates the EUR cost for a given amount of Territe."""
-        await interaction.response.defer()
-        token_data = self.get_token_data('NKT')
-        if token_data is not None:
-            exchange_rate = get_usd_to_eur_exchange_rate()
-            territe_to_usd = (amount / float(token_data['exchangeRate'])) * float(token_data['price'])
-            territe_to_eur = territe_to_usd * exchange_rate
-            formatted_amount = f"{amount:,.0f}".replace(",", ".")  # Format the amount with a period as the thousands separator
-            formatted_eur = f"€{territe_to_eur:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            if formatted_eur.endswith(",00"):
-                formatted_eur = formatted_eur[:-3]
-            
-            # Send the image only once
-            nkt_image_path = './cogs/Marblex/nkt.png'
-            with open(nkt_image_path, 'rb') as nkt_img:
-                nkt_file = discord.File(nkt_img, filename="nkt.png")
-                nkt_url = "attachment://nkt.png"
-                exchange_rate_formatted_no_emoji = token_data['exchangeRateFormatted'].split(' ')[0]
-                embed = Embed(title="Territe Cost", description=f"{formatted_amount} Territe costs {formatted_eur}", color=Color.green())
-                embed.add_field(name="Exchange Rate", value=f"NKT: {exchange_rate_formatted_no_emoji}", inline=False)
-                embed.set_thumbnail(url=nkt_url)
-                footer_text = f"NKT/EUR: €{token_data['price']}"
-                embed.set_footer(text=footer_text)
-                await interaction.followup.send(file=nkt_file, embed=embed)
-        else:
-            await interaction.followup.send("Failed to fetch NKT data.")
-
-async def setup(bot):
+async def setup(bot: EGirlzStoreBot):
     await bot.add_cog(MarblexCog(bot))
