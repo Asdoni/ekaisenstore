@@ -5,7 +5,6 @@ from discord.ext import commands
 
 from bot import EGirlzStoreBot
 
-
 class Anime(commands.Cog):
     def __init__(self, bot: EGirlzStoreBot):
         self.bot = bot
@@ -160,7 +159,6 @@ class Anime(commands.Cog):
     @app_commands.command(name="wink", description="wink wink! 😉")
     async def wink(self, ctx, user: discord.Member):
         await self.create_and_send_embed(ctx, user, "winks at", "wink", "😉")
-
 
 async def setup(bot: EGirlzStoreBot):
     await bot.add_cog(Anime(bot))
