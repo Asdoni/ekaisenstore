@@ -1,10 +1,14 @@
-import discord
-from discord.ext import commands
-from discord import app_commands
 import random
 
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+from bot import EGirlzStoreBot
+
+
 class AvatarCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: EGirlzStoreBot):
         self.bot = bot
 
     @app_commands.command(
@@ -31,5 +35,6 @@ class AvatarCog(commands.Cog):
         embed.add_field(name="Download", value=download_links)
         await ctx.response.send_message(embed=embed)
 
-def setup(bot):
-    bot.add_cog(AvatarCog(bot))
+
+async def setup(bot: EGirlzStoreBot):
+    await bot.add_cog(AvatarCog(bot))

@@ -1,19 +1,22 @@
-import requests
-from discord import app_commands, Embed
-from discord.ext import commands
-from discord.app_commands import Choice
-import aiohttp
 import csv
+
+from discord import app_commands, Embed
+from discord.app_commands import Choice
+from discord.ext import commands
+
+from bot import EGirlzStoreBot
+
 
 def is_allowed_role(ctx):
     allowed_roles = ['Admin', 'Best Egirls']
     user_roles = [role.name for role in ctx.user.roles]
     return any(role in user_roles for role in allowed_roles)
 
+
 MAX_EMBED_LENGTH = 4096  # Embed character limit is around 4096
 
 CLASS_EMOJIS = {
-    "Engineer": "<:Engineer:1062402508598804600>",  
+    "Engineer": "<:Engineer:1062402508598804600>",
     "Destroyer": "<:Destroyer:1062402535450738688>",
     "Witch": "<:Witch:1062402603725639751>",
     "Swordsman": "<:Swordsman:1062402636806111332>",
@@ -21,15 +24,11 @@ CLASS_EMOJIS = {
     # Add more classes and their corresponding emotes as needed
 }
 
+
 def parse_csv_data(csv_data):
     reader = csv.reader(csv_data, delimiter=',', quotechar='"')
     return [row for row in reader]
 
-async def fetch_sheet_as_csv(sheet_url):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(sheet_url) as resp:
-            data = await resp.text()
-            return data.splitlines()
 
 def process_dingo_data(csv_data):
     rows = csv_data.strip().split("\n")
@@ -43,6 +42,7 @@ def process_dingo_data(csv_data):
 
     return messages
 
+
 def process_barrage_data(csv_data):
     # Assuming barrage data processing is similar to dingo
     rows = csv_data.strip().split("\n")
@@ -55,7 +55,6 @@ def process_barrage_data(csv_data):
         messages.append(message)
 
     return messages
-
 
 
 def process_dingo_data(rows):
@@ -133,11 +132,12 @@ def process_barrage_data(rows):
 
     if current_msg:
         messages.append(current_msg)
-        
+
     return messages
 
+
 class SheetsCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: EGirlzStoreBot):
         self.bot = bot
         self.sheet_url = "https://docs.google.com/spreadsheets/d/1kee9UMQcvFAvgdCn_oabqUVNopWGBZmr1raCVuS9ZG4/gviz/tq?tqx=out:csv&sheet=Loot"
 
@@ -148,9 +148,9 @@ class SheetsCog(commands.Cog):
     @commands.check(is_allowed_role)
     @app_commands.choices(item=[Choice(name="Dingo", value="Dingo"), Choice(name="Barrage", value="Barrage")])
     async def loot(self, ctx, item: str):
-        csv_data = await fetch_sheet_as_csv(self.sheet_url)
+        csv_data = await self.fetch_sheet_as_csv(self.sheet_url)
         parsed_data = parse_csv_data(csv_data)
-        
+
         if item.lower() == "dingo":
             formatted_messages = process_dingo_data(parsed_data)
         else:
@@ -169,5 +169,11 @@ class SheetsCog(commands.Cog):
             embed = Embed(title="Loot Data", description=msg, color=0x00FF00)
             await ctx.followup.send(embed=embed)
 
-def setup(bot):
-    bot.add_cog(SheetsCog(bot))
+    async def fetch_sheet_as_csv(self, sheet_url):
+        with self.bot.http_session as session:
+            with session.get(sheet_url) as resp:
+                return resp.text.splitlines()
+
+
+async def setup(bot: EGirlzStoreBot):
+    await bot.add_cog(SheetsCog(bot))

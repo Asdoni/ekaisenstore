@@ -1,9 +1,12 @@
 import discord
-from discord.ext import commands
 from discord import app_commands
+from discord.ext import commands
+
+from bot import EGirlzStoreBot
+
 
 class Echo(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: EGirlzStoreBot):
         self.bot = bot
 
     @app_commands.command(
@@ -16,5 +19,6 @@ class Echo(commands.Cog):
         await target_channel.send(message)
         await interaction.response.send_message(f"Message sent to {target_channel.mention}", ephemeral=True)
 
-def setup(bot):
-    bot.add_cog(Echo(bot))
+
+async def setup(bot: EGirlzStoreBot):
+    await bot.add_cog(Echo(bot))

@@ -1,16 +1,19 @@
-import discord
 import random
+
+from discord import app_commands, Interaction, Embed, Color
 from discord.ext import commands
-from discord import app_commands
+
+from bot import EGirlzStoreBot
+
 
 class RollCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: EGirlzStoreBot):
         self.bot = bot
 
     @app_commands.command(
-            name="roll",
-            description="Roll the dice")
-    async def roll(self, interaction: discord.Interaction):
+        name="roll",
+        description="Roll the dice")
+    async def roll(self, interaction: Interaction):
         random_number = random.randint(1, 100)
 
         # Define emotes based on the roll result
@@ -24,12 +27,15 @@ class RollCog(commands.Cog):
         }
 
         # Find the corresponding emote for the roll result
-        emote = next((emote for (min_range, max_range), emote in emotes.items() if min_range <= random_number <= max_range), "")
+        emote = next(
+            (emote for (min_range, max_range), emote in emotes.items() if min_range <= random_number <= max_range),
+            "",
+        )
 
-        embed = discord.Embed(
+        embed = Embed(
             title="🎲 Roll the Dice 🎲",
             description=f"{emote}  You rolled a {random_number}!  {emote}",
-            color=discord.Color.random()
+            color=Color.random()
         )
 
         author_name = interaction.user.display_name
@@ -38,5 +44,6 @@ class RollCog(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-def setup(bot):
-    bot.add_cog(RollCog(bot))
+
+async def setup(bot: EGirlzStoreBot):
+    await bot.add_cog(RollCog(bot))

@@ -1,5 +1,8 @@
 {
   "Pet": "Pet",
-  "Sex": ["Male", "Female"],
+  "Sex": [
+    "Male",
+    "Female"
+  ],
   "Currency Name": "Kiwi"
 }

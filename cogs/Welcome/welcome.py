@@ -1,9 +1,11 @@
+import json
 import os
+
 import discord
 from discord import app_commands
 from discord.ext import commands
-import json
-import logging
+
+from bot import EGirlzStoreBot
 
 
 def is_allowed_role(ctx):
@@ -14,8 +16,9 @@ def is_allowed_role(ctx):
             return True
     return False
 
+
 class Welcome(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: EGirlzStoreBot):
         self.bot = bot
         self.welcome_message = None
 
@@ -26,11 +29,10 @@ class Welcome(commands.Cog):
             welcome_data = json.load(welcome_file)
             self.welcome_message = welcome_data.get('welcome_message', '')
 
-        
     @app_commands.command(
-            name='welcome', 
-            description="Welcome a user to the server"
-        )
+        name='welcome',
+        description="Welcome a user to the server"
+    )
     async def welcome(self, ctx, user: discord.User = None):
         if not is_allowed_role(ctx):
             await ctx.response.send_message("You don't have the required role to use this command.")
@@ -49,6 +51,7 @@ class Welcome(commands.Cog):
             await ctx.response.send_message(customized_welcome_message)
         else:
             await ctx.response.send_message("Welcome to the server!")
+
 
 """     @app_commands.command(
             name='edit', 
@@ -75,5 +78,7 @@ class Welcome(commands.Cog):
                 json.dump(welcome_data, welcome_file, indent=4)
                 await ctx.response.send_message("Welcome message updated successfully!")
  """
-def setup(bot):
-    bot.add_cog(Welcome(bot))
+
+
+async def setup(bot: EGirlzStoreBot):
+    await bot.add_cog(Welcome(bot))

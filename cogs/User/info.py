@@ -1,11 +1,14 @@
-import discord
-from discord.ext import commands
-from discord import app_commands
-from pytz import timezone as pytz_timezone
 import calendar
 
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+from bot import EGirlzStoreBot
+
+
 class InfoCog(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: EGirlzStoreBot):
         self.bot = bot
 
     @app_commands.command(
@@ -59,5 +62,5 @@ class InfoCog(commands.Cog):
         await ctx.response.send_message(embed=embed)
 
 
-def setup(bot):
-    bot.add_cog(InfoCog(bot))
+async def setup(bot: EGirlzStoreBot):
+    await bot.add_cog(InfoCog(bot))

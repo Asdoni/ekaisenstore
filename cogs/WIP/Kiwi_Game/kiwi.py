@@ -1,15 +1,20 @@
+import datetime
 import json
-from discord.ext import commands
+import os
+
+from discord import Member
 from discord import app_commands
 from discord.app_commands import Choice
-import datetime
-from discord import Member
-import os
+from discord.ext import commands
+
+from bot import EGirlzStoreBot
+
 
 def is_allowed_role(ctx):
     allowed_roles = ['Admin', 'Best Egirls']
     user_roles = [role.name for role in ctx.user.roles]
     return any(role in user_roles for role in allowed_roles)
+
 
 prefix = os.environ.get('PREFIX')
 
@@ -25,14 +30,15 @@ try:
 except (FileNotFoundError, json.JSONDecodeError):
     shop_data = {}
 
+
 class Kiwi(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: EGirlzStoreBot):
         self.bot = bot
         self.pet_variables = {}
 
     @app_commands.command(
-            name="adopt",
-            description="Adopt a pet"
+        name="adopt",
+        description="Adopt a pet"
     )
     @commands.check(is_allowed_role)
     @app_commands.choices(sex=[Choice(name="Male", value="Male"), Choice(name="Female", value="Female")])
@@ -67,9 +73,9 @@ class Kiwi(commands.Cog):
             json.dump(self.pet_variables, pet_file, indent=4)
 
     @app_commands.command(
-            name="buy_pet",
-            description="Buy a pet"
-        )
+        name="buy_pet",
+        description="Buy a pet"
+    )
     async def buy_pet(self, ctx, pet_name: str):
         if pet_name in pet_data:
             user_id = str(ctx.user.id)
@@ -88,9 +94,9 @@ class Kiwi(commands.Cog):
 
     # Command to buy an item from the shop
     @app_commands.command(
-            name="buy_item",
-            description="Buy an item from the shop"
-        )
+        name="buy_item",
+        description="Buy an item from the shop"
+    )
     async def buy_item(self, ctx, item_name: str):
         # Check if the item is available in the shop data
         if item_name in shop_data:
@@ -119,13 +125,13 @@ class Kiwi(commands.Cog):
 
     # Command to increase the pet's level
     @app_commands.command(
-            name="pet_level",
-            description="Increase the pet's level"
-        )
+        name="pet_level",
+        description="Increase the pet's level"
+    )
     async def pet_level(self, ctx):
-    # Get the user's ID
+        # Get the user's ID
         user_id = str(ctx.user.id)
-        
+
         # Print the user's ID for debugging
         print(f"User ID: {user_id}")
 
@@ -135,7 +141,8 @@ class Kiwi(commands.Cog):
             last_level_up = pet_data[user_id].get('last_level_up')
 
             # Check if the pet can level up
-            if last_level_up is None or (datetime.datetime.now() - datetime.datetime.fromisoformat(last_level_up)).days >= 1:
+            if last_level_up is None or (
+                    datetime.datetime.now() - datetime.datetime.fromisoformat(last_level_up)).days >= 1:
                 # Increase the pet's level
                 pet_data[user_id]['level'] += 1
 
@@ -149,9 +156,9 @@ class Kiwi(commands.Cog):
             await ctx.response.send_message("You don't have a pet!")
 
     @app_commands.command(
-            name="stats",
-            description="View your pet's stats"
-        )
+        name="stats",
+        description="View your pet's stats"
+    )
     async def view_pet_stats(self, ctx, user: Member):
         # Get the user's ID
         user_id = str(ctx.user.id)
@@ -177,5 +184,6 @@ class Kiwi(commands.Cog):
         else:
             await ctx.response.send_message(f"<@{user_id}> doesn't have a pet!")
 
-def setup(bot):
-    bot.add_cog(Kiwi(bot))
+
+async def setup(bot: EGirlzStoreBot):
+    await bot.add_cog(Kiwi(bot))

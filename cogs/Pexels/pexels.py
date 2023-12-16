@@ -1,13 +1,16 @@
-from discord.ext import commands
-from discord import app_commands
-import aiohttp
-import random
 import os
+import random
+
+from discord import app_commands
+from discord.ext import commands
+
+from bot import EGirlzStoreBot
 
 pixelskey = os.environ.get('PIXELS_KEY')
 
+
 class Pexels(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: EGirlzStoreBot):
         self.bot = bot
 
     @app_commands.command(
@@ -16,11 +19,12 @@ class Pexels(commands.Cog):
     )
     async def bunny(self, ctx):
         headers = {'Authorization': pixelskey}
-        async with aiohttp.ClientSession() as session:
-            async with session.get('https://api.pexels.com/v1/search?query=bunny', headers=headers) as response:
-                data = await response.json()
+        with self.bot.http_session as session:
+            with session.get('https://api.pexels.com/v1/search?query=bunny', headers=headers) as response:
+                data = response.json()
         random_pic = random.choice(data['photos'])['src']['medium']
         await ctx.response.send_message(random_pic)
 
-def setup(bot):
-    bot.add_cog(Pexels(bot))
+
+async def setup(bot: EGirlzStoreBot):
+    await bot.add_cog(Pexels(bot))
