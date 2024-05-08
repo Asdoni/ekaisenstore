@@ -6,7 +6,6 @@ from discord.ext import commands
 
 from bot import EGirlzStoreBot
 
-
 class InfoCog(commands.Cog):
     def __init__(self, bot: EGirlzStoreBot):
         self.bot = bot
@@ -15,14 +14,14 @@ class InfoCog(commands.Cog):
         name="info",
         description="Get information about a user"
     )
-    async def info(self, ctx, user: discord.Member = None):
+    async def info(self, interaction: discord.Interaction, user: discord.Member = None):
         if not user:
-            user = ctx.author
+            user = interaction.user
 
         joined_timestamp = calendar.timegm(user.joined_at.utctimetuple())
         created_timestamp = calendar.timegm(user.created_at.utctimetuple())
 
-        roles = [f"<@&{role.id}>" for role in user.roles if role != ctx.guild.default_role]
+        roles = [f"<@&{role.id}>" for role in user.roles if role != interaction.guild.default_role]
         roles_str = ", ".join(roles)
 
         embed = discord.Embed(title=f"Member Information: {user.name}", color=discord.Color.blue())
@@ -42,10 +41,8 @@ class InfoCog(commands.Cog):
             inline=False,
         )
 
-        # Check if roles_str is too long for a single embed field
         max_length = 1024
         while len(roles_str) > 0:
-            # If it's too long, find the last comma within the limit and split there
             if len(roles_str) > max_length:
                 split_index = roles_str.rfind(',', 0, max_length)
                 value = roles_str[:split_index]
@@ -59,8 +56,7 @@ class InfoCog(commands.Cog):
 
         embed.set_thumbnail(url=user.display_avatar.url)
 
-        await ctx.response.send_message(embed=embed)
-
+        await interaction.response.send_message(embed=embed)
 
 async def setup(bot: EGirlzStoreBot):
     await bot.add_cog(InfoCog(bot))

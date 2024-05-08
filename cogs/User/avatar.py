@@ -15,14 +15,11 @@ class AvatarCog(commands.Cog):
         name="avatar",
         description="Get the avatar of a user"
     )
-    async def avatar(self, ctx, user: discord.User = None):
+    async def avatar(self, interaction: discord.Interaction, user: discord.User = None):
         if not user:
-            user = ctx.user
+            user = interaction.user
 
-        # Generating a random color for the embed.
         random_color = random.randint(0, 0xFFFFFF)
-
-        # Avatar URL for PNG, JPG, and GIF.
         png_url = user.display_avatar.replace(format="png").url
         jpg_url = user.display_avatar.replace(format="jpg").url
         gif_url = user.display_avatar.replace(format="gif").url if user.display_avatar.is_animated() else None
@@ -30,11 +27,10 @@ class AvatarCog(commands.Cog):
         embed = discord.Embed(title=f"{user.name}'s Avatar", color=random_color)
         embed.set_image(url=user.display_avatar.url)
         download_links = f"[PNG]({png_url}) | [JPG]({jpg_url})"
-        if gif_url:  # Only add the GIF link if the avatar is animated.
+        if gif_url:
             download_links += f" | [GIF]({gif_url})"
         embed.add_field(name="Download", value=download_links)
-        await ctx.response.send_message(embed=embed)
-
+        await interaction.response.send_message(embed=embed)
 
 async def setup(bot: EGirlzStoreBot):
     await bot.add_cog(AvatarCog(bot))

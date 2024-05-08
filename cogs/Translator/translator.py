@@ -1,65 +1,101 @@
+import os
 import random
 import discord
 from discord import app_commands, Interaction, Member
 from discord.app_commands import Choice
 from discord.ext import commands
-from googletrans import Translator, LANGUAGES
+
+import deepl
+from langdetect import detect
+
 from bot import EGirlzStoreBot
 from slashCommandCustomErrors import TranslationError
 
-# Mapping of flag emojis to their respective language codes
+DEEPL_API_KEY = os.getenv("DEEPL_API_KEY")
+
+translator = deepl.Translator(DEEPL_API_KEY)
+
 FLAG_EMOJI_TO_LANGUAGE = {
-    "🇬🇧": "en", "🇺🇸": "en", "🇪🇸": "es", "🇲🇽": "es", "🇮🇹": "it",
-    "🇩🇪": "de", "🇫🇷": "fr", "🇨🇳": "zh-CN", "🇯🇵": "ja", "🇷🇺": "ru",
-    "🇧🇷": "pt", "🇵🇹": "pt", "🇳🇱": "nl", "🇸🇪": "sv", "🇦🇷": "es",
-    "🇨🇴": "es", "🇰🇷": "ko", "🇸🇦": "ar", "🇮🇱": "he", "🇹🇷": "tr",
-    "🇩🇰": "da", "🇧🇪": "nl", "🇬🇷": "el", "🇵🇱": "pl", "🇨🇿": "cs"
+    "🇬🇧": "EN-GB",
+    "🇺🇸": "EN-US",
+    "🇩🇪": "DE",
+    "🇫🇷": "FR",
+    "🇪🇸": "ES",
+    "🇮🇹": "IT",
+    "🇳🇱": "NL",
+    "🇵🇱": "PL",
+    "🇷🇺": "RU",
+    "🇯🇵": "JA",
+    "🇨🇳": "ZH",
+    "🇵🇹": "PT-PT",
+    "🇧🇷": "PT-BR",
+    "🇩🇰": "DA",
+    "🇫🇮": "FI",
+    "🇬🇷": "EL",
+    "🇭🇺": "HU",
+    "🇮🇩": "ID",
+    "🇰🇷": "KO",
+    "🇳🇴": "NB",
+    "🇷🇴": "RO",
+    "🇸🇰": "SK",
+    "🇸🇮": "SL",
+    "🇸🇪": "SV",
+    "🇹🇷": "TR"
 }
 
-# Mapping of Google Translate language codes to their names
-LANG_CODES_TO_NAMES = {code: name.capitalize() for code, name in LANGUAGES.items()}
+LANG_CODES_TO_NAMES = {
+    "EN-GB": "English (UK)",
+    "EN-US": "English (US)",
+    "DE": "German",
+    "FR": "French",
+    "ES": "Spanish",
+    "IT": "Italian",
+    "NL": "Dutch",
+    "PL": "Polish",
+    "RU": "Russian",
+    "JA": "Japanese",
+    "ZH": "Chinese",
+    "PT-PT": "Portuguese (Portugal)",
+    "PT-BR": "Portuguese (Brazil)",
+    "DA": "Danish",
+    "FI": "Finnish",
+    "EL": "Greek",
+    "HU": "Hungarian",
+    "ID": "Indonesian",
+    "KO": "Korean",
+    "NB": "Norwegian (Bokmål)",
+    "RO": "Romanian",
+    "SK": "Slovak",
+    "SL": "Slovenian",
+    "SV": "Swedish",
+    "TR": "Turkish"
+}
 
-# Generate the list of language choices for flags present in FLAG_EMOJI_TO_LANGUAGE
-TOP_25_LANGUAGES = list(FLAG_EMOJI_TO_LANGUAGE.keys())[:25]
-limited_languages = [FLAG_EMOJI_TO_LANGUAGE[flag] for flag in TOP_25_LANGUAGES if flag in FLAG_EMOJI_TO_LANGUAGE]
 
 def generate_choices():
-    """
-    Generates language choices for the translation command.
-    """
     choices = []
-    inverted_flag_emoji_to_language = {v: k for k, v in FLAG_EMOJI_TO_LANGUAGE.items()}
-    added_languages = set()
-
-    for lang_code in limited_languages:
-        lang_name = LANG_CODES_TO_NAMES.get(lang_code.lower(), lang_code)
-        if "-" in lang_name:
-            lang_name, country_code = lang_name.split('-')
-            lang_name = f"{LANGUAGES[lang_name].capitalize()} ({country_code.upper()})"
-        flag_emoji = inverted_flag_emoji_to_language.get(lang_code, "")
-        if lang_name not in added_languages:
-            added_languages.add(lang_name)
-            choices.append(Choice(name=f"{flag_emoji} {lang_name}", value=lang_code))
+    for flag, lang_code in FLAG_EMOJI_TO_LANGUAGE.items():
+        lang_name = LANG_CODES_TO_NAMES.get(lang_code, "")
+        choices.append(Choice(name=f"{flag} {lang_name}", value=lang_code))
     return choices
 
+from langdetect import detect
+
 def build_embed(author: Member, reacting_user: Member, text: str, to: str):
-    """
-    Builds a Discord embed with the translated text.
-    """
-    translator = Translator()
     try:
-        translation = translator.translate(text, dest=to)
+        source_lang_code = detect(text)
+        source_lang_name = LANG_CODES_TO_NAMES.get(source_lang_code.upper(), "Unknown language")
+        
+        translation = translator.translate_text(text, target_lang=to)
         embed = discord.Embed(
             title=f"{author.display_name}",
             description=translation.text,
             color=discord.Colour(random.randint(0, 0xFFFFFF)),
         )
-        translation_src = LANGUAGES[translation.src.lower()].capitalize()
-        translation_dest = LANGUAGES[translation.dest.lower()].capitalize()
-
+        target_lang_name = LANG_CODES_TO_NAMES.get(to.upper(), to)
         embed.add_field(
             name="Translation Details",
-            value=f"From {translation_src} ({translation.src.upper()}) to {translation_dest} ({translation.dest.upper()})",
+            value=f"From {source_lang_name} ({source_lang_code.upper()}) to {target_lang_name} ({to})",
             inline=False
         )
         embed.set_thumbnail(url=author.display_avatar.url)
@@ -69,22 +105,16 @@ def build_embed(author: Member, reacting_user: Member, text: str, to: str):
         )
         return embed
     except Exception as e:
-        raise TranslationError(f"Failed to translate message")
+        raise TranslationError(f"Failed to translate message: {str(e)}")
+
 
 class TranslatorCog(commands.Cog):
-    """
-    Cog for handling translation features.
-    """
-
     def __init__(self, bot: EGirlzStoreBot):
         self.bot = bot
         self.translated_messages = set()
 
     @commands.Cog.listener()
-    async def on_raw_reaction_add(self, payload):
-        """
-        Handles reaction events to translate messages.
-        """
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
         if payload.user_id == self.bot.user.id:
             return
         emoji = payload.emoji.name
@@ -106,9 +136,6 @@ class TranslatorCog(commands.Cog):
     )
     @app_commands.choices(to=generate_choices())
     async def translate(self, interaction: Interaction, prompt: str, to: str):
-        """
-        Slash command to translate text into a specified language.
-        """
         embed = build_embed(interaction.user, interaction.user, prompt, to)
         await interaction.response.send_message(embed=embed)
 

@@ -50,15 +50,13 @@ class MarblexCog(commands.Cog):
                 price = token["price"] * curr_rate
                 ex_str = ''
                 if 'mbx_value' and 'exchangeRate' in token:
-                    # assume its nkt/nka or other game-token
                     ex_rate = token['exchangeRate']
                     ex_str = f'\n**Exchange-Rate:** {ex_rate["rate_formatted"]} {ex_rate["emoji"]}'
                     mbx_str = f'\n**{key}/MBX:** {format_number(token["mbx_value"], 4)}'
                 else:
-                    # assume its mbx
-                    mbx_str = "\n"+"\n".join(
+                    mbx_str = "\n" + "\n".join(
                         [
-                            f'**MBX/{t}:** {format_number(mbx_price/(token_vals[t]["price"]*curr_rate), 4)}'
+                            f'**MBX/{t}:** {format_number(mbx_price / (token_vals[t]["price"] * curr_rate), 4)}'
                             for t in ['NKA', 'NKT']
                         ]
                     )
@@ -100,17 +98,28 @@ class MarblexCog(commands.Cog):
         await self.convert_command(interaction, amount, token, currency, is_to_currency=False)
 
     def get_token_exchange_rate(self, token_type: ExchangeRateToken) -> dict:
-        ret = {}
         url = f'https://ninokuni-token.netmarble.com/api/exchangeRate?tokenType={token_type}'
         res = self.bot.http_session.get(url)
+        ret = {
+            'rate': 0,
+            'increase': 0,
+            'rate_formatted': "Error",
+            'emoji': "❌"
+        }
         if res.status_code == 200:
-            data = res.json()['result'][-1]
-            ex_rate = int(data['exchangeRate'])
-            increase = int(data['increaseExchangeRate'])
-            ret['rate'] = ex_rate
-            ret['rate_formatted'] = f"{ex_rate} ({increase})"
-            ret['increase'] = increase
-            ret['emoji'] = ':chart_with_upwards_trend:' if increase >= 0 else ':chart_with_downwards_trend:'
+            data = res.json().get('result')
+            if data:
+                latest_data = data[-1]
+                ex_rate = int(latest_data.get('exchangeRate', 0))
+                increase = int(latest_data.get('increaseExchangeRate', 0))
+                ret.update(
+                    {
+                        'rate': ex_rate,
+                        'rate_formatted': f"{ex_rate} ({increase})",
+                        'increase': increase,
+                        'emoji': ':chart_with_upwards_trend:' if increase >= 0 else ':chart_with_downwards_trend:'
+                    }
+                )
         return ret
 
     def get_token_values(self, token_types: List[str]) -> dict:
@@ -169,7 +178,11 @@ class MarblexCog(commands.Cog):
             if 'exchangeRate' in token_data:
                 rate_data = token_data['exchangeRate']
                 if is_terr_arr:
-                    exchange_rate = rate_data['rate']
+                    if 'rate' in rate_data:
+                        exchange_rate = rate_data['rate']
+                    else:
+                        exchange_rate = 1
+                        print(f"Warning: 'rate' key not found in exchange rate data for {token_type}")
             if is_to_currency:
                 price = (amount / exchange_rate) * token_price * currency_exchange
                 description = (
@@ -198,7 +211,6 @@ class MarblexCog(commands.Cog):
             await interaction.followup.send(file=get_token_file(token_type.lower()), embed=embed)
         else:
             await interaction.followup.send(f"Failed to fetch {token_type} data.")
-
 
 async def setup(bot: EGirlzStoreBot):
     await bot.add_cog(MarblexCog(bot))

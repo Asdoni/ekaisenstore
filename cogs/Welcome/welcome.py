@@ -7,7 +7,6 @@ from discord.ext import commands
 
 from bot import EGirlzStoreBot
 
-
 def is_allowed_role(ctx):
     allowed_roles = ['Admin', 'Best Egirls']
     user_roles = [role.name for role in ctx.user.roles]
@@ -15,7 +14,6 @@ def is_allowed_role(ctx):
         if role in user_roles:
             return True
     return False
-
 
 class Welcome(commands.Cog):
     def __init__(self, bot: EGirlzStoreBot):
@@ -52,7 +50,6 @@ class Welcome(commands.Cog):
         else:
             await ctx.response.send_message("Welcome to the server!")
 
-
 """     @app_commands.command(
             name='edit', 
             description="Edit the welcome message"
@@ -78,7 +75,6 @@ class Welcome(commands.Cog):
                 json.dump(welcome_data, welcome_file, indent=4)
                 await ctx.response.send_message("Welcome message updated successfully!")
  """
-
 
 async def setup(bot: EGirlzStoreBot):
     await bot.add_cog(Welcome(bot))

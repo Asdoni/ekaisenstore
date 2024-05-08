@@ -15,41 +15,40 @@ class EmojiCog(commands.Cog):
 
     @app_commands.command(name="steal", description="Steal an emoji and add it to your server")
     @discord.app_commands.checks.has_permissions(manage_emojis_and_stickers=True)
-    async def steal(self, ctx, name: str, emoji: str):
-        # Extract emoji ID from the string
+    async def steal(self, interaction: discord.Interaction, name: str, emoji: str):
         match = re.search(r'<a?:\w+:(\d+)>', emoji)
         if not match:
-            await ctx.response.send_message("Invalid emoji format.")
+            await interaction.response.send_message("Invalid emoji format.", ephemeral=True)
             return
 
         emoji_id = match.group(1)
-        is_animated = emoji.startswith('<a:')  # Detect animation
-        file_extension = 'gif' if is_animated else 'png'  # Set the file extension
-        emoji_url = f"https://cdn.discordapp.com/emojis/{emoji_id}.{file_extension}"  # Update URL
+        is_animated = emoji.startswith('<a:')
+        file_extension = 'gif' if is_animated else 'png'
+        emoji_url = f"https://cdn.discordapp.com/emojis/{emoji_id}.{file_extension}"
 
         with self.bot.http_session.get(emoji_url) as resp:
             if resp.status_code != 200:
-                await ctx.response.send_message("Failed to download emoji.")
+                await interaction.response.send_message("Failed to download emoji.")
                 return
             image_data = resp.content
 
         try:
-            new_emoji = await ctx.guild.create_custom_emoji(name=name, image=image_data)
-            await ctx.response.send_message(f"Emoji {new_emoji} added to the server with the name {name}.")
+            new_emoji = await interaction.guild.create_custom_emoji(name=name, image=image_data)
+            await interaction.response.send_message(f"Emoji {new_emoji} added to the server with the name {name}.")
         except HTTPException as e:
-            await ctx.response.send_message(f"Failed to add emoji: {e.text}")
+            await interaction.response.send_message(f"Failed to add emoji: {e.text}")
 
     @steal.error
-    async def steal_error(self, ctx, error):
+    async def steal_error(self, interaction: discord.Interaction, error):
         if isinstance(error, app_commands.MissingPermissions) or isinstance(error, app_commands.MissingRole):
-            await ctx.response.send_message("You don't have permission to use this command.")
+            await interaction.response.send_message("You don't have permission to use this command.")
 
     @app_commands.command(name="bigemoji", description="Show a bigger version of an emoji")
-    async def bigemoji(self, ctx, emoji: str):
+    async def bigemoji(self, interaction: discord.Interaction, emoji: str):
         # Extract emoji ID from the string
         match = re.search(r'<a?:\w+:(\d+)>', emoji)
         if not match:
-            await ctx.response.send_message("Invalid emoji format.")
+            await interaction.response.send_message("Invalid emoji format.")
             return
 
         emoji_id = match.group(1)
@@ -59,7 +58,6 @@ class EmojiCog(commands.Cog):
         jpg_url = f"https://cdn.discordapp.com/emojis/{emoji_id}.jpg"
         gif_url = f"https://cdn.discordapp.com/emojis/{emoji_id}.gif" if is_animated else None
 
-        # Generate a random color for the embed
         random_color = random.randint(0, 0xFFFFFF)
 
         embed = discord.Embed(color=random_color)
@@ -71,12 +69,12 @@ class EmojiCog(commands.Cog):
 
         embed.add_field(name="Download", value=download_links)
         embed.set_footer(text=f"Emoji ID: {emoji_id}")
-        await ctx.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed)
 
     @steal.error
-    async def steal_error(self, ctx, error):
+    async def steal_error(self, interaction: discord.Interaction, error):
         if isinstance(error, app_commands.MissingPermissions) or isinstance(error, app_commands.MissingRole):
-            await ctx.response.send_message("You don't have permission to use this command.")
+            await interaction.response.send_message("You don't have permission to use this command.")
 
 
 async def setup(bot: EGirlzStoreBot):
