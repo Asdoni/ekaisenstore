@@ -50,13 +50,13 @@ class EGirlzStoreBot(commands.Bot):
             return
         for (dirpath, dirnames, filenames) in os.walk(self.cogs_dir):
             if "not_working" in dirpath:
-                continue  # don't load not working commands
+                continue
             if "WIP" in dirpath and not self.enable_wip_commands:
-                continue  # don't load wip commands
+                continue
             for filename in filenames:
-                if filename.endswith('.py') and not filename.startswith('_'):
+                if filename.endswith('.py') and not filename.startswith('_') and not "utilities" in filename:
+                    python_path = os.path.relpath(dirpath, os.path.dirname(__file__)).replace(os.sep, '.')
                     try:
-                        python_path = os.path.relpath(dirpath, os.path.dirname(__file__)).replace(os.sep, '.')
                         await self.load_extension(f"{python_path}.{filename[:-3]}")
                         self.logger.info(f"Loaded cog {filename[:-3]}")
                     except commands.ExtensionError:
@@ -67,7 +67,7 @@ class EGirlzStoreBot(commands.Bot):
         self.logger.debug(f'Bot ID {Fore.YELLOW}{self.user.id}{Fore.RESET}')
         self.logger.debug(f'Discord Version {Fore.YELLOW}{__version__}{Fore.RESET}')
         self.logger.debug(f'Python Version {Fore.YELLOW}{platform.python_version()}{Fore.RESET}')
-        custom_status = Activity(name="you...", type=ActivityType.watching)
+        custom_status = Activity(name="Karpax's OnlyFans", type=ActivityType.watching)
         await self.change_presence(status=Status.online, activity=custom_status)
 
     async def setup_hook(self) -> None:
@@ -93,13 +93,11 @@ class EGirlzStoreBot(commands.Bot):
             exit()
 
     async def on_message(self, message: Message):
-        # Check if the message author is a bot
         if message.author.bot:
-            return  # Ignore messages from bots
+            return 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         author_display_name = message.author.display_name
 
-        # Check if the message has attachments
         if message.attachments:
             attachment_info = "Attachment: " + ", ".join(attachment.filename for attachment in message.attachments)
             self.logger.debug(f"{timestamp} - {author_display_name}: - {attachment_info}")
@@ -119,7 +117,6 @@ class EGirlzStoreBot(commands.Bot):
     @commands.Cog.listener()
     async def on_command_error(self, ctx: Context[BotT], error: errors.CommandError, /) -> None:
         if not isinstance(error, commands.CommandNotFound):
-            # delete msg if a command error occurred
             await ctx.message.delete(delay=3)
         if isinstance(error, NotAllowedGuild):
             self.logger.error(f"{ctx.command} cannot be used in guild {ctx.guild.name}")
@@ -129,7 +126,12 @@ class EGirlzStoreBot(commands.Bot):
             await ctx.send(error.args[0], ephemeral=True, delete_after=20)
         else:
             return await super().on_command_error(ctx, error)
-
+        
+#    async def on_guild_remove(self, guild):
+#        await self.db.execute(
+#            "INSERT INTO removed_guilds (guild_id) VALUES ($1) ON CONFLICT (guild_id) DO NOTHING",
+#            guild.id
+#        )
 
 class CommandTree(app_commands.CommandTree):
     async def on_error(self, interaction: Interaction, error: AppCommandError) -> None:
@@ -163,7 +165,6 @@ class CommandTree(app_commands.CommandTree):
         elif isinstance(error, MissingPermissions):
             logger.error(f'{interaction.user} failed to use {interaction.command.name} because of missing permission')
             await interaction.response.send_message(error, ephemeral=True)
-        # catch more errors if necessary
         else:
             logger.error(
                 f'Ignoring exception in command {interaction.command}:\n'

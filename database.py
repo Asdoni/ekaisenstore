@@ -1,88 +1,62 @@
+import asyncio
 import os
 from logging import Logger
-
-import aiomysql
-
+import asyncpg
 
 class Database:
     def __init__(self, logger: Logger):
         self.pool = None
-        self.logger = logger
-
+        #self.logger = logger
+        
     async def connect(self):
         try:
-            host = os.getenv('DB_HOST')
-            port = int(os.environ.get('DB_PORT'))
-            user = os.environ.get('DB_USER')
-            self.logger.info(f"trying to connect to database on {host}:{port} with user: {user}")
-            self.pool = await aiomysql.create_pool(
-                host=host,
-                user=user,
-                port=port,
-                password=os.environ.get('DB_PASSWORD'),
-                db=os.environ.get('DB_NAME')
-            )
-            self.logger.info(f"Successfully connected to database '{os.environ.get('DB_NAME')}'")
+            #self.logger.info("Trying to connect to the database...")
+            # Include SSL mode in the connection parameters
+            self.pool = await asyncpg.create_pool(
+                dsn=os.getenv('DATABASE_URL'), 
+                ssl='require'
+                )
+
+            #self.logger.info("Successfully connected to the database with SSL.")
         except Exception as e:
-            self.logger.error(e.args[1])
+            #self.logger.error(f"Failed to connect to the database: {e}")
+            raise
 
     async def close(self):
         if self.pool:
-            self.pool.close()
-            await self.pool.wait_closed()
-            self.logger.info("Closed database pool")
+            await self.pool.close()
+            #self.logger.info("Closed database pool")
 
-    async def get_cursor(self):
-        if not self.pool:
-            await self.connect()
-        conn = await self.pool.acquire()
-        return conn.cursor()
-
-    async def release(self, con):
-        await self.pool.release(con)
-
-    async def commit(self, query=None, *args):
-        async with await self.get_cursor() as cur:
-            try:
-                if query:
-                    if args and isinstance(args[0], tuple):
-                        await cur.execute(query, args[0])
-                    else:
-                        await cur.execute(query, args)
-                await cur.connection.commit()
-                self.logger.debug(f"[Database Commit]: '{query}'")
-            except Exception as e:
-                await cur.connection.rollback()
-                raise e  # Re-raise the exception after rollback
-            finally:
-                await self.release(cur.connection)
+    async def execute(self, query, *args):
+        async with self.pool.acquire() as connection:
+            async with connection.transaction():
+                try:
+                    await connection.execute(query, *args)
+                    #self.logger.debug(f"[Database Execute]: '{query}'")
+                    return True, None  # Indicate success, and no error message
+                except asyncpg.UniqueViolationError as e:
+                    #self.logger.error(f"Unique constraint failed to execute query: {e}")
+                    return False, "This PID is already registered in this guild."  # Indicate failure and provide an error message
+                except Exception as e:
+                    #self.logger.error(f"Failed to execute query: {e}")
+                    return False, f"An error occurred: {e}"  # Indicate failure and provide a generic error message
 
     async def fetchone(self, query, *args):
-        async with await self.get_cursor() as cur:
+        async with self.pool.acquire() as connection:
             try:
-                if args and isinstance(args[0], tuple):
-                    await cur.execute(query, args[0])
-                else:
-                    await cur.execute(query, args)
-                self.logger.debug(f"[Database Fetchone]: '{query}'")
-                return await cur.fetchone()
+                result = await connection.fetchrow(query, *args)
+                #self.logger.debug(f"[Database Fetchone]: '{query}'")
+                return result
             except Exception as e:
-                await cur.connection.rollback()
-                raise e
-            finally:
-                await self.release(cur.connection)
+                #self.logger.error(f"Failed to fetch data: {e}")
+                raise
 
     async def fetchall(self, query, *args):
-        async with await self.get_cursor() as cur:
+        async with self.pool.acquire() as connection:
             try:
-                if args and isinstance(args[0], tuple):
-                    await cur.execute(query, args[0])
-                else:
-                    await cur.execute(query, args)
-                self.logger.debug(f"[Database Fetchall]: '{query}'")
-                return await cur.fetchall()
+                result = await connection.fetch(query, *args)
+                #self.logger.debug(f"[Database Fetchall]: '{query}'")
+                return result
             except Exception as e:
-                await cur.connection.rollback()
-                raise e
-            finally:
-                await self.release(cur.connection)
+                #self.logger.error(f"Failed to fetch data: {e}")
+                raise

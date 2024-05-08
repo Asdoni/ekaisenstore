@@ -19,7 +19,6 @@ class ExampleCog(commands.Cog):
         
 """
 
-
 def is_channel_nsfw(interaction: Interaction) -> bool:
     if not interaction.channel.is_nsfw():
         raise NSWFError()
@@ -34,3 +33,9 @@ class NSWFError(CheckFailure):
 class TranslationError(Exception):
     def __init__(self, message: Optional[str] = None):
         super().__init__(message or "Failed to translate message.")
+        
+
+class StealEmojiError(CheckFailure):
+    def __init__(self, message: Optional[str] = None):
+        # Providing a default message for the error
+        super().__init__(message or 'An error occurred while attempting to steal the emoji.')
