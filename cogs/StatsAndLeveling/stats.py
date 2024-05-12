@@ -256,9 +256,9 @@ class StatsBot(commands.Cog):
             stats_field = "SUM(user_stats.total_messages) AS total_messages, user_xp_levels.level AS level, user_xp_levels.xp AS xp"
 
         query = f"""
-            SELECT user_stats.user_id, {stats_field}
+            SELECT user_stats.user_id, {stats_field}, COALESCE(user_xp_levels.level, 0) AS level, COALESCE(user_xp_levels.xp, 0) AS xp
             FROM user_stats
-            INNER JOIN user_xp_levels ON user_stats.user_id = user_xp_levels.user_id AND user_stats.guild_id = user_xp_levels.guild_id
+            LEFT JOIN user_xp_levels ON user_stats.user_id = user_xp_levels.user_id AND user_stats.guild_id = user_xp_levels.guild_id
             WHERE user_stats.guild_id = $1 {timeframe_condition}
             GROUP BY user_stats.user_id, user_xp_levels.level, user_xp_levels.xp
             ORDER BY user_xp_levels.xp DESC
@@ -269,7 +269,7 @@ class StatsBot(commands.Cog):
 
         description_lines = []
         for idx, user in enumerate(top_users):
-            line = f"{idx+1}. <@{user['user_id']}> - {user['total_messages']} Messages\n**Level:** {user['level']} | **XP:** {user['xp']}"
+            line = f"{idx+1}. <@{user['user_id']}> - {user['total_messages']} Messages\n**Level:** {user.get('level', 'N/A')} | **XP:** {user.get('xp', 'N/A')}"
             description_lines.append(line)
         description = "\n".join(description_lines) if description_lines else "No data available."
 
