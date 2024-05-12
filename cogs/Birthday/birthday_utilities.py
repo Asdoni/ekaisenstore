@@ -385,16 +385,22 @@ class BirthdayUtilities:
             user = guild.get_member(int(user_id))
             if not user:
                 continue
-            birth_day = birthday['birth_day']
-            birth_month = birthday['birth_month']
-            birth_year = birthday['birth_year']
+            day, month, year = birthday['birth_day'], birthday['birth_month'], birthday['birth_year']
 
-            month_name = calendar.month_name[birth_month]
-            birthday_str = f"{user.mention} {birth_day:02d}/{birth_month:02d}" + (f"/{birth_year}" if birth_year > 1 else "")
+            month_name = calendar.month_name[month]
+            if year > 1:
+                formatted_birthday = f"{day:02d} {month_name} {year}"
+            else:
+                formatted_birthday = f"{day:02d} {month_name}"
 
             if month_name not in birthday_dict:
                 birthday_dict[month_name] = []
-            birthday_dict[month_name].append(birthday_str)
+            birthday_dict[month_name].append((day, f"{user.mention} {formatted_birthday}"))
+
+        # Sort the birthdays within each month by day
+        for month in birthday_dict:
+            birthday_dict[month].sort(key=lambda x: x[0])
+            birthday_dict[month] = [birthday[1] for birthday in birthday_dict[month]]
 
         return birthday_dict
     
@@ -404,15 +410,13 @@ class BirthdayUtilities:
             embed.set_thumbnail(url=interaction.guild.icon.url)
 
         if birthday_dict:
-            month_to_index = {month: index for index, month in enumerate(calendar.month_name) if month}
-            for month_name in sorted(birthday_dict.keys(), key=lambda x: month_to_index[x]):
-
+            for month_name in sorted(birthday_dict.keys(), key=lambda x: datetime.strptime(x, "%B")):
                 month_birthdays = "\n".join(birthday_dict[month_name])
                 if month_birthdays:
                     embed.add_field(name=month_name, value=month_birthdays, inline=False)
         else:
             embed.description += "\n\nNo birthdays registered yet."
-        
+
         return embed
     
     async def get_birthday_list_message_id(self, guild_id):
