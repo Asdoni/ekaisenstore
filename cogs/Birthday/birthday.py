@@ -457,18 +457,20 @@ class BirthdayView(discord.ui.View):
         current_year = datetime.now().year
 
         for data in birthdays:
-            print(f"Processing data: {data}")
             if 'birth_year' in data and 'birth_month' in data and 'birth_day' in data:
                 year, month, day = data['birth_year'], data['birth_month'], data['birth_day']
                 birthday = datetime(year if year > 1 else current_year, month, day)
-                birthday_str = birthday.strftime("%d/%m" if year == 1 else "%d/%m/%Y")
+                if year > 1:
+                    birthday_str = f"{birthday.day} {birthday.strftime('%B')} {birthday.year}"
+                else:
+                    birthday_str = f"{birthday.day} {birthday.strftime('%B')}"
                 month_name = birthday.strftime("%B")
                 if month_name not in birthday_dict:
                     birthday_dict[month_name] = []
                 user = interaction.guild.get_member(int(data["user_id"]))
                 if user:
                     birthday_display = f"{user.mention} {birthday_str}"
-                    birthday_dict[month_name].append(birthday_display)
+                    birthday_dict[month_name].append((day, birthday_display))
             else:
                 print(f"Missing key data in: {data}")
 
@@ -479,8 +481,9 @@ class BirthdayView(discord.ui.View):
 
         for month in sorted(birthday_dict.keys(), key=lambda x: datetime.strptime(x, "%B")):
             if birthday_dict[month]:
-                month_birthdays = "\n".join(birthday_dict[month])
-                embed.add_field(name=month, value=month_birthdays, inline=False)
+                month_birthdays = sorted(birthday_dict[month], key=lambda x: x[0])  # Sort by day
+                birthdays_formatted = "\n".join(birthday[1] for birthday in month_birthdays)
+                embed.add_field(name=month, value=birthdays_formatted, inline=False)
 
         if not birthday_dict:
             embed.description += "\n\nNo birthdays registered yet!"
